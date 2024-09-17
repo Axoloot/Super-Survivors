@@ -1,15 +1,46 @@
 require "ISUI/ISLayoutManager"
 
+distancePlayerIsAbleToIssueCommand = 5.0
+
 SurvivorInfoWindow = ISCollapsableWindow:derive("SurvivorInfoWindow");
 
-function CallButtonPressed()
+function SurvivorInfoWindow:ShowCommandsMenu()
+	print( "Showing Commands Menu" )
+
+	local context = ISContextMenu.get( 0, self:getAbsoluteX() + 265, self:getAbsoluteY() + 90 )
+	context:setVisible(true)
+
+	survivorMenu( context, self.memberWeAreWaitingFor:Get() )
+end
+
+function WaitUntilSurvivorIsInRange()
+	if( mySurvivorInfoWindow.memberWeAreWaitingFor == nil ) then
+		Events.OnTick.Remove( WaitUntilSurvivorIsInRange )
+	end
+
+	local distance = getDistanceBetween( getSpecificPlayer(0), mySurvivorInfoWindow.memberWeAreWaitingFor:Get() )
+	print( "Distance between player and SSurvivor: " .. distance )
+
+	if( distance < distancePlayerIsAbleToIssueCommand ) then
+		Events.OnTick.Remove( WaitUntilSurvivorIsInRange )
+		SurvivorInfoWindow.ShowCommandsMenu(mySurvivorInfoWindow)
+	end
+end
+
+function SurvivorInfoWindow:CommandButtonPressed()
 	local GID = SSM:Get(0):getGroupID()
 	local members = SSGM:Get(GID):getMembers()
-	local selected = tonumber(myGroupWindow:getSelected())
-	local member = members[selected]
-	if(member) then 
-		getSpecificPlayer(0):Say(getText("ContextMenu_SD_CallName_Before") .. member:getName()..getText("ContextMenu_SD_CallName_After"))
-		member:getTaskManager():AddToTop(ListenTask:new(member,getSpecificPlayer(0),false)) 
+	local selectedMember = tonumber( myGroupWindow:getSelected() )
+	local member = members[selectedMember]
+	if( member ) then
+		self.memberWeAreWaitingFor = member
+		getSpecificPlayer(0):Say( getText("ContextMenu_SD_CallName_Before") .. member:getName() .. getText("ContextMenu_SD_CallName_After") )
+		local task = ListenTask:new( member, getSpecificPlayer(0), false )
+		task.onCompletedWalking = function()
+			SurvivorInfoWindow.ShowCommandsMenu(self)
+		end
+		member:getTaskManager():AddToTop( task )
+		--Events.OnTick.Add( WaitUntilSurvivorIsInRange )
 	end
 end
 
@@ -25,6 +56,7 @@ function SurvivorInfoWindow:new(x, y, width, height)
 	o.title = getText("ContextMenu_SD_SurvivorInfo");
 	o.pin = false;
 	o:noBackground();
+	o.memberWeAreWaitingFor = nil
 	return o;
 end
 
@@ -33,28 +65,19 @@ function SurvivorInfoWindow:setText(newText)
 	self.HomeWindow:paginate();
 end
 
-
 function SurvivorInfoWindow:createChildren()
-
-
 	self.HomeWindow = ISRichTextPanel:new(0, 16, 375, 615);
 	self.HomeWindow:initialise();
 	self.HomeWindow.autosetheight = false
 	self.HomeWindow:ignoreHeightChange()
 	self:addChild(self.HomeWindow)
-	
-	self.MyCallButton = ISButton:new(275, 25, 60, 25, getText("ContextMenu_SD_CallOver"), self, CallButtonPressed);		
-	
-	self.MyCallButton:setEnable(true);
-	self.MyCallButton:initialise();
-	--MyCallButton.textureColor.r = 255;
-	self.MyCallButton:addToUIManager();
-	self:addChild(self.MyCallButton)
-	
-	self.MyCallButton:setVisible(true);
-	
-	
-	
+
+	self.CommandButton = ISButton:new( 265, 25, 75, 25, "Command", self, self.CommandButtonPressed )
+	self.CommandButton:initialise()
+	self.CommandButton:setEnable(true)
+	self.CommandButton:setVisible(true)
+	self:addChild(self.CommandButton)
+
 	ISCollapsableWindow.createChildren(self);
 end
 
